@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ares HUD | Mars Surface Explorer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050208;--panel:rgba(22,10,20,.88);--rust:#d9531e;--orange:#ff6b35;
+  --sand:#f7c59f;--text:#f4e9e1;--muted:#a89f91;--border:rgba(255,107,53,.25);
+  --glass:rgba(255,255,255,.04);--safe:#4ade80;--warn:#fbbf24;--danger:#f87171;--route:#06b6d4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:"Inter",sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;
+  background-image:radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.8),transparent),
+  radial-gradient(1.5px 1.5px at 30% 70%,rgba(255,255,255,.6),transparent),
+  radial-gradient(1px 1px at 55% 35%,rgba(247,197,159,.8),transparent);
+  background-size:500px 500px;opacity:.5}
+.app{display:flex;height:100vh}
+
+.sidebar{width:380px;padding:18px;overflow-y:auto;background:var(--panel);
+  backdrop-filter:blur(20px);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:12px;z-index:1000;flex-shrink:0}
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--orange);border-radius:3px}
+.logo{font-family:"Orbitron",sans-serif;letter-spacing:2px;color:var(--text);
+  text-decoration:none;display:flex;align-items:center;gap:10px;font-size:1rem}
+.logo strong{color:var(--orange);text-shadow:0 0 10px rgba(255,107,53,.6)}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);box-shadow:0 0 8px var(--orange)}
+#search{width:100%;padding:10px 14px;border-radius:6px;border:1px solid var(--border);
+  background:var(--glass);color:var(--text);outline:none;font-size:.85rem}
+#search:focus{border-color:var(--orange);box-shadow:0 0 10px rgba(255,107,53,.15)}
+.results{list-style:none;max-height:100px;overflow-y:auto;margin-top:6px}
+.results li{padding:8px 12px;margin-top:3px;border-radius:5px;cursor:pointer;
+  color:var(--muted);background:var(--glass);font-size:.8rem;border:1px solid transparent}
+.results li:hover{color:var(--orange);border-color:var(--border)}
+.panel{background:var(--glass);border:1px solid var(--border);border-radius:10px;padding:14px}
+.panel h3{font-family:"Orbitron",sans-serif;font-size:.75rem;letter-spacing:1px;
+  color:var(--sand);margin-bottom:10px;text-transform:uppercase}
+.panel p,.panel dd{color:var(--muted);font-size:.78rem;line-height:1.5}
+.panel dl{margin-top:8px;display:grid;grid-template-columns:1fr 1.5fr;gap:6px 10px}
+.panel dt{color:var(--sand);font-size:.7rem;font-weight:600;text-transform:uppercase}
+.route-controls{display:flex;flex-direction:column;gap:8px}
+.route-select{width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font-size:.8rem;outline:none}
+.route-btns{display:flex;gap:6px}
+.btn{flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);
+  background:var(--glass);color:var(--muted);font-size:.75rem;font-weight:600;cursor:pointer;text-align:center}
+.btn:hover{color:var(--text);border-color:var(--orange)}
+.btn.active{background:var(--orange);color:#fff;border-color:var(--orange)}
+.btn-calc{background:linear-gradient(135deg,var(--rust),var(--orange));color:#fff;border:none}
+.tag{display:inline-block;font-size:.6rem;padding:3px 8px;border-radius:999px;
+  background:rgba(217,83,30,.2);color:var(--orange);margin-bottom:8px;
+  font-weight:600;text-transform:uppercase;border:1px solid rgba(217,83,30,.3)}
+.tag.safe{background:rgba(74,222,128,.1);color:var(--safe);border-color:rgba(74,222,128,.3)}
+.tag.warn{background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.3)}
+.tag.danger{background:rgba(248,113,113,.1);color:var(--danger);border-color:rgba(248,113,113,.3)}
+.hint{text-align:center;padding:14px;color:var(--muted);font-size:.75rem;font-style:italic}
+
+.mapwrap{flex:1;position:relative;background:#000;min-width:0}
+#map,#globe-container{position:absolute;inset:0;z-index:1}
+#globe-container{display:none;cursor:grab;overflow:hidden}
+#globe-container:active{cursor:grabbing}
+#globe-container canvas{display:block;width:100%;height:100%}
+
+.view-toggle{position:absolute;top:16px;right:16px;z-index:1000;
+  display:flex;background:rgba(5,2,8,.9);backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.view-btn{padding:8px 16px;font-family:"Orbitron",sans-serif;font-size:.7rem;
+  letter-spacing:1px;color:var(--muted);background:transparent;border:none;cursor:pointer}
+.view-btn.active{background:var(--orange);color:#fff}
+.view-btn:hover:not(.active){color:var(--text)}
+
+.layer-control{position:absolute;top:16px;left:16px;z-index:1000;
+  background:rgba(5,2,8,.92);backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:8px;
+  padding:12px 14px;min-width:220px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);color:var(--text);
+  font-family:"Inter",sans-serif;font-size:.82rem}
+.layer-control .lc-title{font-family:"Orbitron",sans-serif;font-size:.7rem;
+  letter-spacing:1px;color:var(--sand);margin-bottom:8px;text-transform:uppercase}
+.layer-control .lc-section{margin-top:10px;padding-top:8px;border-top:1px solid var(--border)}
+.layer-control .lc-section-title{font-size:.7rem;color:var(--muted);margin-bottom:6px;
+  text-transform:uppercase;letter-spacing:.5px}
+.layer-control label{display:flex;align-items:center;gap:8px;padding:4px 0;
+  cursor:pointer;color:var(--muted);transition:color .2s}
+.layer-control label:hover{color:var(--text)}
+.layer-control input[type="checkbox"]{accent-color:var(--orange);width:14px;height:14px;cursor:pointer}
+.layer-control input[type="radio"]{accent-color:var(--orange);width:14px;height:14px;cursor:pointer}
+
+.route-status{position:absolute;top:70px;left:16px;z-index:1000;
+  padding:8px 14px;border-radius:6px;background:rgba(5,2,8,.9);
+  backdrop-filter:blur(8px);border:1px solid var(--orange);
+  color:var(--orange);font-size:.75rem;font-family:"Orbitron",sans-serif;
+  display:none;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.route-status.show{display:block}
+
+.coords{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000;
+  padding:6px 14px;border-radius:6px;font-size:.7rem;
+  background:rgba(5,2,8,.9);backdrop-filter:blur(8px);
+  border:1px solid var(--border);color:var(--sand);
+  font-family:"Orbitron",monospace;white-space:nowrap}
+
+.legend{position:absolute;bottom:16px;right:16px;z-index:1000;
+  padding:12px;border-radius:8px;background:rgba(5,2,8,.9);
+  backdrop-filter:blur(12px);border:1px solid var(--border);
+  font-size:.7rem;color:var(--muted);max-width:220px;
+  box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.legend .lt{font-weight:700;color:var(--sand);margin-bottom:8px;
+  font-family:"Orbitron",sans-serif;font-size:.7rem;text-transform:uppercase}
+.legend .li{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.legend .sw{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.15);flex-shrink:0}
+
+.globe-hint{position:absolute;top:70px;left:50%;transform:translateX(-50%);z-index:1000;
+  padding:8px 16px;border-radius:999px;background:rgba(5,2,8,.85);
+  border:1px solid var(--border);color:var(--muted);font-size:.72rem;
+  pointer-events:none;opacity:0;transition:opacity .4s}
+.globe-hint.show{opacity:1}
+
+.leaflet-control-layers{display:none !important}
+
+.pulse-marker{position:relative}
+.pulse-marker::before{content:"";position:absolute;inset:-5px;border-radius:50%;
+  border:2px solid var(--orange);animation:pulse 2s infinite}
+@keyframes pulse{0%{transform:scale(.8);opacity:1}100%{transform:scale(2.5);opacity:0}}
+.route-line{stroke:var(--route);stroke-width:3;stroke-opacity:.9;filter:drop-shadow(0 0 6px var(--route))}
+.route-point-start{background:var(--safe);border:2px solid #fff;border-radius:50%;box-shadow:0 0 10px var(--safe)}
+.route-point-end{background:var(--danger);border:2px solid #fff;border-radius:50%;box-shadow:0 0 10px var(--danger)}
+
+@media(max-width:850px){
+  .app{flex-direction:column-reverse}
+  .sidebar{width:100%;height:50vh;border-right:0;border-top:1px solid var(--border)}
+  .mapwrap{height:50vh}
+}
+
+/* ---- Photos + Learn more (added) ---- */
+.photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.photo-grid a{display:block;position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:#000}
+.photo-grid img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;transition:transform .25s}
+.photo-grid a:hover img{transform:scale(1.06)}
+.photo-credit{color:var(--muted);font-size:.65rem;margin-top:8px}
+.more-links a{display:block;padding:8px 10px;margin-top:6px;border:1px solid var(--border);border-radius:6px;
+  color:var(--sand);font-size:.78rem;text-decoration:none;background:var(--glass)}
+.more-links a:hover{color:#fff;border-color:var(--orange);background:rgba(255,107,53,.12)}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <a href="#" class="logo"><span class="logo-dot"></span>ARES <strong>INTERFACE</strong></a>
+  <div><input type="text" id="search" placeholder="Search sites..." autocomplete="off"><ul class="results" id="results"></ul></div>
+  <div class="panel">
+    <h3>🧭 Smart Route Planner</h3>
+    <div class="route-controls">
+      <select id="route-mode" class="route-select">
+        <option value="radiation">Optimize: Least Radiation</option>
+        <option value="dust">Optimize: Least Dust Exposure</option>
+        <option value="terrain">Optimize: Safest Terrain</option>
+      </select>
+      <div class="route-btns">
+        <button class="btn" id="btn-start" onclick="setRouteMode('start')">1. Set Start</button>
+        <button class="btn" id="btn-end" onclick="setRouteMode('end')">2. Set End</button>
+      </div>
+      <button class="btn btn-calc" onclick="calculateRoute()">Calculate Safest Path</button>
+      <button class="btn" onclick="clearRoute()">Clear Route</button>
+    </div>
+    <div id="route-stats" style="margin-top:10px;display:none"><dl>
+      <dt>Distance</dt><dd id="stat-dist">-</dd>
+      <dt>Avg Hazard</dt><dd id="stat-hazard">-</dd>
+      <dt>Est. Time</dt><dd id="stat-time">-</dd>
+    </dl></div>
+  </div>
+  <div id="default-info">
+    <div class="panel"><h3>🗺️ Mission Overview</h3>
+      <p>Toggle layers to repaint the planet. Use the Route Planner to navigate safely. Switch to <strong>3D Globe</strong> (top-right) for a planetary view.</p></div>
+    <div class="panel"><h3>🌍 Atmosphere</h3><dl>
+      <dt>Composition</dt><dd>95.32% CO₂ · 2.6% N₂ · 1.6% Ar</dd>
+      <dt>Pressure</dt><dd>6–10 millibars</dd>
+      <dt>Temp</dt><dd>-153°C to 20°C</dd>
+    </dl></div>
+    <div class="panel"><h3>☢️ Radiation</h3>
+      <p>Dose: <strong>625–1,700+ mSv</strong>. Secondary neutrons scatter up from regolith.</p></div>
+    <p class="hint">Click markers for EVA planning.</p>
+  </div>
+  <div id="site-info" style="display:none;flex-direction:column;gap:12px"></div>
+</aside>
+
+<main class="mapwrap">
+  <div class="view-toggle">
+    <button class="view-btn active" id="btn-2d" onclick="setView('2d')">🗺️ 2D MAP</button>
+    <button class="view-btn" id="btn-3d" onclick="setView('3d')">🌍 3D GLOBE</button>
+  </div>
+
+  <div class="layer-control">
+    <div class="lc-title">📡 Map Layers</div>
+    <div class="lc-section">
+      <div class="lc-section-title">Base Layer</div>
+      <label><input type="radio" name="base" value="imagery" checked onchange="setBaseLayer('imagery')"> 🛰️ Imagery (Viking)</label>
+      <label><input type="radio" name="base" value="elevation" onchange="setBaseLayer('elevation')"> ⛰️ Elevation (MOLA)</label>
+    </div>
+    <div class="lc-section">
+      <div class="lc-section-title">Analysis Overlays</div>
+      <label><input type="checkbox" id="chk-geo" onchange="toggleOverlay('geology', this.checked)"> 🪨 Geologic Structure</label>
+      <label><input type="checkbox" id="chk-rad" onchange="toggleOverlay('radiation', this.checked)"> ☢️ Radiation Zones</label>
+      <label><input type="checkbox" id="chk-dust" onchange="toggleOverlay('dust', this.checked)"> 💨 Dust Hazards</label>
+    </div>
+  </div>
+
+  <div id="map"></div>
+  <div id="globe-container"></div>
+  <div class="route-status" id="route-status">Click map to set point</div>
+  <div class="globe-hint" id="globe-hint">Drag to rotate · Scroll to zoom · Click a marker</div>
+  <div class="coords" id="coords">LAT: 0.00° | LON: 0.00°</div>
+  <div class="legend" id="legend"><div class="lt" id="legend-title"></div><div id="legend-items"></div></div>
+</main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script>
+/* ============================================================
+   1. STATE
+   ============================================================ */
+let currentView = '2d';
+let activeOverlay = 'geology';
+let scene, camera, renderer, globeGroup, overlayMesh, globeTex, globeTexCtx;
+let markers3D = [], routeLine3D = null, globeSphereMesh = null;
+let dragging = false, lastX = 0, lastY = 0, rotX = 0.3, rotY = 0;
+let autoRot = true, targetRotX = null, targetRotY = null, camZ = 32;
+const R = 10;
+
+let routeMode = null;
+let startPoint = null, endPoint = null;
+let startM2D = null, endM2D = null;
+let startMarker3D = null, endMarker3D = null;
+let lastPath = null;
+
+/* ============================================================
+   2. NASA DATA
+   ============================================================ */
+const MISSIONS = [
+  {id:"viking1",name:"Viking 1",type:"Lander",year:1976,lat:22.27,lon:-47.95,loc:"Western Chryse Planitia",goal:"Imaging, biology, meteorology, seismology",route:"Static lander",dist:"0 km",unit:"Smooth plains",era:"Amazonian"},
+  {id:"viking2",name:"Viking 2",type:"Lander",year:1976,lat:47.67,lon:134.28,loc:"Utopia Planitia",goal:"Imaging, biology, meteorology, seismology",route:"Static lander",dist:"0 km",unit:"Smooth plains",era:"Amazonian"},
+  {id:"pathfinder",name:"Pathfinder + Sojourner",type:"Lander+Rover",year:1997,lat:19.33,lon:-33.55,loc:"Ares Vallis",goal:"Tech demo; APXS rock analysis",route:"Lander to rock Chimp",dist:"N/A",unit:"Channel material",era:"Hesperian",targets:"Barnacle Bill, Yogi, Scooby Doo, Chimp"},
+  {id:"spirit",name:"Spirit (MER-A)",type:"Rover",year:2004,lat:-14.57,lon:175.47,loc:"Gusev crater",goal:"Geology; search for past water",route:"Landing site → Troy, near Home Plate",dist:"7.73 km",unit:"Ridged plains",era:"Hesperian",targets:"Adirondack, Husband Hill, Home Plate"},
+  {id:"opportunity",name:"Opportunity (MER-B)",type:"Rover",year:2004,lat:-1.95,lon:-5.53,loc:"Meridiani Planum, Eagle crater",goal:"Geology; hematite",route:"Eagle crater → Perseverance Valley, Endeavour rim",dist:"45.16 km",unit:"Streaked plains",era:"Hesperian",targets:"Endurance, Victoria, Endeavour, Marathon Valley"},
+  {id:"phoenix",name:"Phoenix",type:"Lander",year:2008,lat:68.15,lon:-125.9,loc:"Northern polar region",goal:"Northern polar soil sampling",route:"Static lander",dist:"0 km",unit:"Polar residual cap",era:"Amazonian"},
+  {id:"curiosity",name:"Curiosity (MSL)",type:"Rover",year:2012,lat:-4.59,lon:137.44,loc:"Bradbury Landing, Gale crater",goal:"Explore Gale crater and Mount Sharp",route:"Bradbury → Mount Sharp → Basque Lakes",dist:"Over 38 km",unit:"Canyon floor",era:"Amazonian",targets:"Yellowknife Bay, Kimberley, Vera Rubin Ridge, Gediz Vallis",eva:"Follow rover path to Vera Rubin Ridge. Moderate slopes. Monitor secondary neutron dose."},
+  {id:"insight",name:"InSight",type:"Lander",year:2018,lat:4.5,lon:135.9,loc:"Western Elysium Planitia",goal:"Seismology and heat flow",route:"Static lander",dist:"0 km",unit:"Smooth plains",era:"Amazonian"},
+  {id:"perseverance",name:"Perseverance",type:"Rover",year:2021,lat:18.44,lon:77.45,loc:"Octavia E. Butler Landing, Jezero",goal:"Astrobiology and sample collection",route:"Floor → delta → margin → rim",dist:"42.83 km",unit:"Channel material",era:"Noachian",targets:"Séítah, delta, Bright Angel, crater rim",eva:"Delta-front sampling. Hazard: loose regolith, fine Séítah dust."},
+  {id:"ingenuity",name:"Ingenuity",type:"Helicopter",year:2021,lat:18.4,lon:77.45,loc:"Wright Brothers Field, Jezero",goal:"Powered flight; scouting (72 flights)",route:"Wright Brothers Field → Airfield Chi",dist:"~17.0 km",unit:"—",era:"—"}
+];
+
+/* ============================================================
+   3. SHARED HAZARD / COLOR LOGIC
+   ============================================================ */
+function jitter(lat,lon,s){
+  const h = Math.sin((lat*12.9898 + lon*78.233 + s) * 43758.5453);
+  return (h - Math.floor(h)) * 0.2 + 0.9;
+}
+function shade(hex,f){
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  r = Math.min(255,Math.max(0,r*f));
+  g = Math.min(255,Math.max(0,g*f));
+  b = Math.min(255,Math.max(0,b*f));
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+
+function geologyColor(lat,lon){
+  const j = jitter(Math.floor(lat/4), Math.floor(lon/4), 1);
+  const a = Math.abs(lat);
+  if (a > 72) return shade("#e0f2fe", j);
+  if (a > 62) return shade("#cbd5e1", j);
+  if (lon >= -140 && lon <= -100 && lat >= -25 && lat <= 25) return shade("#dc2626", j);
+  if (lon >= 120 && lon <= 150 && lat >= -5 && lat <= 35) return shade("#ea580c", j);
+  if (lat >= -22 && lat <= -3 && lon >= -125 && lon <= -40) return shade("#2563eb", j);
+  if (lat >= -55 && lat <= -25 && lon >= 55 && lon <= 90) return shade("#7c3aed", j);
+  if (Math.hypot(lat-18.4, lon-77.4) < 8) return shade("#06b6d4", j);
+  if (Math.hypot(lat+4.6, lon-137.4) < 8) return shade("#06b6d4", j);
+  if (lat < -15) return shade("#6b21a8", j);
+  if (lat > 20) return shade("#fbbf24", j);
+  return shade("#a1887f", j);
+}
+
+function radiationColor(lat,lon){
+  const j = jitter(Math.floor(lat/4), Math.floor(lon/4), 2);
+  let e;
+  if (lon >= -140 && lon <= -100 && lat >= -25 && lat <= 25) e = 8;
+  else if (lon >= 120 && lon <= 150 && lat >= -5 && lat <= 35) e = 4;
+  else if (lat < -15) e = 2;
+  else if (lat >= -55 && lat <= -25 && lon >= 55 && lon <= 90) e = -7;
+  else if (lat > 20) e = -2;
+  else e = 0;
+  if (e > 6) return shade("#991b1b", j);
+  if (e > 3) return shade("#ea580c", j);
+  if (e > 0) return shade("#ca8a04", j);
+  if (e > -3) return shade("#65a30d", j);
+  return shade("#15803d", j);
+}
+
+function dustColor(lat,lon){
+  const j = jitter(Math.floor(lat/4), Math.floor(lon/4), 3);
+  if (lat >= 35 && lat <= 65 && lon >= -70 && lon <= -10) return shade("#c2410c", j);
+  if (lat >= -5 && lat <= 30 && lon >= -150 && lon <= -100) return shade("#d97706", j);
+  if (lat >= -55 && lat <= -25 && lon >= 55 && lon <= 90) return shade("#b45309", j);
+  if (lat > 60 || lat < -60) return shade("#64748b", j);
+  return shade("#475569", j);
+}
+
+function getCost(lat,lon,mode){
+  const a = Math.abs(lat);
+  if (mode === 'radiation') {
+    let e = 0;
+    if (lon >= -140 && lon <= -100 && lat >= -25 && lat <= 25) e = 8;
+    else if (lon >= 120 && lon <= 150 && lat >= -5 && lat <= 35) e = 4;
+    else if (lat < -15) e = 2;
+    else if (lat >= -55 && lat <= -25 && lon >= 55 && lon <= 90) e = -7;
+    else if (lat > 20) e = -2;
+    if (e > 6) return 10; if (e > 3) return 8; if (e > 0) return 5; if (e > -3) return 3; return 1;
+  }
+  if (mode === 'dust') {
+    if (lat >= 35 && lat <= 65 && lon >= -70 && lon <= -10) return 10;
+    if (lat >= -5 && lat <= 30 && lon >= -150 && lon <= -100) return 8;
+    if (lat >= -55 && lat <= -25 && lon >= 55 && lon <= 90) return 8;
+    if (lat > 60 || lat < -60) return 1;
+    return 3;
+  }
+  if (lat < -15 && a > 30) return 9;
+  if (a > 62) return 8;
+  if (lat >= -22 && lat <= -3 && lon >= -125 && lon <= -40) return 7;
+  if (lat > 20) return 2;
+  if (lat >= -55 && lat <= -25 && lon >= 55 && lon <= 90) return 4;
+  return 5;
+}
+
+function latLonToGrid(lat,lon){ return {x: Math.floor(lon+180), y: Math.floor(90-lat)}; }
+function gridToLatLon(x,y){ return {lat: 90-(y+0.5), lon: (x+0.5)-180}; }
+
+function astar(start,end,mode){
+  const open = new Map(), closed = new Set(), g = new Map(), f = new Map(), from = new Map();
+  const sk = `${start.x},${start.y}`, ek = `${end.x},${end.y}`;
+  g.set(sk, 0);
+  f.set(sk, Math.hypot(start.x-end.x, start.y-end.y));
+  open.set(sk, {x: start.x, y: start.y});
+  const dirs = [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]];
+  while (open.size) {
+    let cur = null, best = Infinity;
+    for (const [k,n] of open) {
+      const v = f.get(k) || Infinity;
+      if (v < best) { best = v; cur = {k, ...n}; }
+    }
+    if (cur.k === ek) {
+      const p = [cur.k];
+      while (from.has(cur.k)) { cur.k = from.get(cur.k); p.unshift(cur.k); }
+      return p.map(k => { const [x,y] = k.split(',').map(Number); return gridToLatLon(x,y); });
+    }
+    open.delete(cur.k); closed.add(cur.k);
+    for (const [dx,dy] of dirs) {
+      const nx = cur.x+dx, ny = cur.y+dy;
+      if (nx < 0 || nx >= 360 || ny < 0 || ny >= 180) continue;
+      const nk = `${nx},${ny}`;
+      if (closed.has(nk)) continue;
+      const mc = (dx && dy) ? 1.414 : 1;
+      const hc = getCost(gridToLatLon(nx,ny).lat, gridToLatLon(nx,ny).lon, mode);
+      const tg = g.get(cur.k) + mc*hc;
+      if (tg < (g.get(nk) || Infinity)) {
+        from.set(nk, cur.k);
+        g.set(nk, tg);
+        f.set(nk, tg + Math.hypot(nx-end.x, ny-end.y));
+        open.set(nk, {x: nx, y: ny});
+      }
+    }
+  }
+  return null;
+}
+
+/* ============================================================
+   4. 2D MAP (Leaflet)
+   ============================================================ */
+const map = L.map("map", {crs: L.CRS.EPSG4326, center: [10,0], zoom: 2, minZoom: 1, maxZoom: 7});
+const trek = "https://trek.nasa.gov/tiles/Mars/EQ/";
+const tail = "/1.0.0/default/default028mm/{z}/{y}/{x}.jpg";
+const viking = L.tileLayer(trek + "Mars_Viking_MDIM21_ClrMosaic_global_232m" + tail, {maxNativeZoom: 7, noWrap: true});
+const mola = L.tileLayer(trek + "Mars_MGS_MOLA_ClrShade_merge_global_463m" + tail, {maxNativeZoom: 6, noWrap: true});
+
+function makeGridLayer(fn) {
+  return L.GridLayer.extend({
+    createTile(c) {
+      const cv = document.createElement("canvas"), s = 256;
+      cv.width = cv.height = s;
+      const x = cv.getContext("2d");
+      const nw = this._map.unproject([c.x*s, c.y*s], c.z);
+      const se = this._map.unproject([(c.x+1)*s, (c.y+1)*s], c.z);
+      for (let py = 0; py < s; py += 8) {
+        const lat = nw.lat - (nw.lat - se.lat) * (py/s);
+        for (let px = 0; px < s; px += 8) {
+          const lon = nw.lng + (se.lng - nw.lng) * (px/s);
+          x.fillStyle = fn(lat, lon);
+          x.fillRect(px, py, 8, 8);
+        }
+      }
+      return cv;
+    }
+  });
+}
+const geoLayer = new (makeGridLayer(geologyColor))({opacity: 0.65});
+const radLayer = new (makeGridLayer(radiationColor))({opacity: 0.6});
+const dustLayer = new (makeGridLayer(dustColor))({opacity: 0.6});
+
+viking.addTo(map);
+
+const LEGENDS = {
+  "Geologic Structure": {t: "USGS Geologic Families", items: [
+    ["#dc2626","Tharsis Volcanic"],["#ea580c","Elysium Volcanic"],
+    ["#6b21a8","Noachian Highlands"],["#a1887f","Hesperian Plains"],
+    ["#fbbf24","Amazonian Plains"],["#2563eb","Valles Marineris"],
+    ["#06b6d4","Channel/Delta"],["#e0f2fe","Polar Caps"]
+  ]},
+  "Radiation Zones": {t: "Dose Risk", items: [
+    ["#991b1b","Extreme (high elevation)"],["#ea580c","High"],
+    ["#ca8a04","Moderate"],["#65a30d","Lower"],["#15803d","Best shielding (basins)"]
+  ]},
+  "Dust Hazards": {t: "Dust Susceptibility", items: [
+    ["#c2410c","Severe (Acidalia)"],["#d97706","High (Tharsis)"],
+    ["#b45309","High (Hellas)"],["#475569","Low"],["#64748b","Polar calm"]
+  ]}
+};
+
+function setLegend(n) {
+  const L2 = LEGENDS[n]; if (!L2) return;
+  document.getElementById("legend-title").textContent = L2.t;
+  document.getElementById("legend-items").innerHTML = L2.items.map(i =>
+    `<div class="li"><div class="sw" style="background:${i[0]}"></div>${i[1]}</div>`
+  ).join("");
+}
+
+/* ============================================================
+   5. CUSTOM LAYER CONTROL
+   ============================================================ */
+function setBaseLayer(type) {
+  if (type === 'imagery') {
+    map.removeLayer(mola);
+    viking.addTo(map);
+  } else {
+    map.removeLayer(viking);
+    mola.addTo(map);
+  }
+}
+
+function toggleOverlay(name, enabled) {
+  const layerMap = { geology: geoLayer, radiation: radLayer, dust: dustLayer };
+  const layer = layerMap[name];
+  if (!layer) return;
+
+  if (enabled) {
+    layer.addTo(map);
+  } else {
+    map.removeLayer(layer);
+  }
+
+  updateLegendFromState();
+
+  if (currentView === '3d' && globeTexCtx) {
+    updateGlobeFromOverlays();
+  }
+}
+
+function updateLegendFromState() {
+  if (map.hasLayer(geoLayer)) { setLegend("Geologic Structure"); return; }
+  if (map.hasLayer(radLayer)) { setLegend("Radiation Zones"); return; }
+  if (map.hasLayer(dustLayer)) { setLegend("Dust Hazards"); return; }
+  document.getElementById("legend-title").textContent = "";
+  document.getElementById("legend-items").innerHTML = "";
+}
+
+function updateGlobeFromOverlays() {
+  let mode = null;
+  if (map.hasLayer(geoLayer)) mode = 'geology';
+  else if (map.hasLayer(radLayer)) mode = 'radiation';
+  else if (map.hasLayer(dustLayer)) mode = 'dust';
+
+  if (mode) {
+    activeOverlay = mode;
+    updateGlobeTexture(mode);
+  } else {
+    if (overlayMesh) {
+      overlayMesh.material.opacity = 0;
+      globeTex.needsUpdate = true;
+    }
+  }
+}
+
+function syncCheckboxes() {
+  document.getElementById('chk-geo').checked = map.hasLayer(geoLayer);
+  document.getElementById('chk-rad').checked = map.hasLayer(radLayer);
+  document.getElementById('chk-dust').checked = map.hasLayer(dustLayer);
+}
+
+/* ============================================================
+   6. 3D GLOBE (Three.js) - PROCEDURAL TEXTURE
+   ============================================================ */
+function latLonTo3D(lat, lon, r) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const th = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -(r * Math.sin(phi) * Math.cos(th)),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(th)
+  );
+}
+
+function point3DToLatLon(point) {
+  const n = point.clone().normalize();
+  const lat = 90 - Math.acos(n.y) * 180 / Math.PI;
+  let lon = Math.atan2(n.z, -n.x) * 180 / Math.PI - 180;
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+  return {lat, lon};
+}
+
+// Procedural Mars Texture Generator (No external dependencies, no CORS issues)
+function createProceduralMarsTexture(width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+
+  // Base Mars color
+  ctx.fillStyle = '#c1440e';
+  ctx.fillRect(0, 0, width, height);
+
+  // Add large dark regions (Syrtis Major, Mare Acidalium, etc.)
+  const darkRegions = [
+    {x: 0.3, y: 0.4, r: 0.15, color: 'rgba(100, 40, 20, 0.6)'}, // Syrtis Major
+    {x: 0.7, y: 0.3, r: 0.2, color: 'rgba(80, 30, 15, 0.5)'},  // Mare Acidalium
+    {x: 0.5, y: 0.6, r: 0.18, color: 'rgba(90, 35, 18, 0.5)'}, // Sinus Meridiani
+    {x: 0.2, y: 0.7, r: 0.12, color: 'rgba(110, 45, 22, 0.4)'}, // Hellas region
+  ];
+  darkRegions.forEach(region => {
+    const gradient = ctx.createRadialGradient(region.x * width, region.y * height, 0, region.x * width, region.y * height, region.r * width);
+    gradient.addColorStop(0, region.color);
+    gradient.addColorStop(1, 'rgba(193, 68, 14, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  });
+
+  // Add noise for surface detail
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 30;
+    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+    data[i+1] = Math.max(0, Math.min(255, data[i+1] + noise));
+    data[i+2] = Math.max(0, Math.min(255, data[i+2] + noise));
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  // Add polar caps
+  const polarHeight = height * 0.15;
+  const northPolar = ctx.createLinearGradient(0, 0, 0, polarHeight);
+  northPolar.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+  northPolar.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = northPolar;
+  ctx.fillRect(0, 0, width, polarHeight);
+
+  const southPolar = ctx.createLinearGradient(0, height - polarHeight, 0, height);
+  southPolar.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  southPolar.addColorStop(1, 'rgba(255, 255, 255, 0.9)');
+  ctx.fillStyle = southPolar;
+  ctx.fillRect(0, height - polarHeight, width, polarHeight);
+
+  // Add craters
+  for (let i = 0; i < 200; i++) {
+    const x = Math.random() * width;
+    const y = Math.random() * height;
+    const r = Math.random() * 8 + 2;
+    const crater = ctx.createRadialGradient(x, y, 0, x, y, r);
+    crater.addColorStop(0, 'rgba(60, 20, 10, 0.7)');
+    crater.addColorStop(0.7, 'rgba(150, 60, 30, 0.3)');
+    crater.addColorStop(1, 'rgba(193, 68, 14, 0)');
+    ctx.fillStyle = crater;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return canvas;
+}
+
+function createProceduralBumpMap(width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+
+  // Base gray
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, width, height);
+
+  // Add noise for bump detail
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 60;
+    const val = Math.max(0, Math.min(255, 128 + noise));
+    data[i] = val;
+    data[i+1] = val;
+    data[i+2] = val;
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  // Add crater bumps
+  for (let i = 0; i < 200; i++) {
+    const x = Math.random() * width;
+    const y = Math.random() * height;
+    const r = Math.random() * 8 + 2;
+    const crater = ctx.createRadialGradient(x, y, 0, x, y, r);
+    crater.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
+    crater.addColorStop(0.7, 'rgba(100, 100, 100, 0.3)');
+    crater.addColorStop(1, 'rgba(128, 128, 128, 0)');
+    ctx.fillStyle = crater;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return canvas;
+}
+
+// Real Mars imagery for the 3D planet. Tries, in order:
+//  1) assets/mars.jpg (optional local file)  2) NASA Trek tiles (same data as the 2D map)  3) Wikimedia Mars map.
+// If none loads, the procedural texture below stays as a fallback.
+function loadImg(src, ok, fail) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => ok(img);
+  img.onerror = fail;
+  img.src = src;
+}
+function loadRealMars(canvas, done) {
+  const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  const fromWiki = () => loadImg(
+    'https://upload.wikimedia.org/wikipedia/commons/4/46/Solarsystemscope_texture_2k_mars.jpg',
+    img => { ctx.drawImage(img, 0, 0, W, H); done(); },
+    () => console.warn('Real Mars texture unavailable - using procedural texture'));
+  const fromTiles = () => {
+    const cols = 8, rows = 4, tw = W / cols, th = H / rows;
+    let finished = 0, loaded = 0;
+    const end = () => { if (++finished < cols * rows) return; loaded ? done() : fromWiki(); };
+    for (let x = 0; x < cols; x++) for (let y = 0; y < rows; y++) {
+      loadImg(trek + 'Mars_Viking_MDIM21_ClrMosaic_global_232m' + tail.replace('{z}', 2).replace('{y}', y).replace('{x}', x),
+        img => { ctx.drawImage(img, x * tw, y * th, tw + 1, th + 1); loaded++; end(); }, end);
+    }
+  };
+  loadImg('assets/mars.jpg', img => { ctx.drawImage(img, 0, 0, W, H); done(); }, fromTiles);
+}
+
+function init3D() {
+  const cont = document.getElementById('globe-container');
+  if (typeof THREE === 'undefined') {
+    cont.innerHTML = '<p style="color:#ff7b7b;padding:40px;text-align:center">3D engine failed to load.</p>';
+    return;
+  }
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, cont.clientWidth / cont.clientHeight || 1, 0.1, 1000);
+  camera.position.set(0, 0, camZ);
+  renderer = new THREE.WebGLRenderer({alpha: true, antialias: true});
+  renderer.setSize(cont.clientWidth || 800, cont.clientHeight || 600);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+  cont.appendChild(renderer.domElement);
+
+  // Lighting for realistic look
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(5, 3, 5);
+  scene.add(dirLight);
+  const backLight = new THREE.DirectionalLight(0xff6b35, 0.3);
+  backLight.position.set(-5, -2, -5);
+  scene.add(backLight);
+
+  globeGroup = new THREE.Group();
+  scene.add(globeGroup);
+
+  // Generate procedural textures
+  const texWidth = 2048;
+  const texHeight = 1024;
+  const marsCanvas = createProceduralMarsTexture(texWidth, texHeight);
+  const bumpCanvas = createProceduralBumpMap(texWidth, texHeight);
+
+  const marsTexture = new THREE.CanvasTexture(marsCanvas);
+  marsTexture.colorSpace = THREE.SRGBColorSpace;
+  if (THREE.sRGBEncoding) marsTexture.encoding = THREE.sRGBEncoding;
+  marsTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  marsTexture.magFilter = THREE.LinearFilter;
+  marsTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  const bumpTexture = new THREE.CanvasTexture(bumpCanvas);
+  bumpTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  bumpTexture.magFilter = THREE.LinearFilter;
+
+  // Base sphere with Mars texture
+  const baseMaterial = new THREE.MeshStandardMaterial({
+    map: marsTexture,
+    bumpMap: bumpTexture,
+    bumpScale: 0.05,
+    roughness: 0.9,
+    metalness: 0.1
+  });
+  
+  const baseSphereMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(R, 128, 128),
+    baseMaterial
+  );
+  globeGroup.add(baseSphereMesh);
+
+  // Replace the fake texture with real Mars imagery as soon as it loads
+  loadRealMars(marsCanvas, () => {
+    baseMaterial.bumpMap = null;          // the random bumps were fake; real imagery already has the relief
+    baseMaterial.needsUpdate = true;
+    marsTexture.needsUpdate = true;
+  });
+
+  // Invisible sphere for raycasting
+  globeSphereMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(R, 64, 64),
+    new THREE.MeshBasicMaterial({visible: false})
+  );
+  globeGroup.add(globeSphereMesh);
+
+  // Overlay texture sphere (for analysis layers)
+  const tc = document.createElement('canvas');
+  tc.width = 2048; tc.height = 1024;
+  globeTexCtx = tc.getContext('2d');
+  globeTex = new THREE.CanvasTexture(tc);
+  globeTex.minFilter = THREE.LinearFilter;
+  globeTex.magFilter = THREE.LinearFilter;
+  overlayMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(R * 1.01, 64, 64),
+    new THREE.MeshBasicMaterial({map: globeTex, transparent: true, opacity: 0, depthWrite: false})
+  );
+  globeGroup.add(overlayMesh);
+
+  // Markers
+  markers3D = [];
+  MISSIONS.forEach(m => {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 16, 16),
+      new THREE.MeshBasicMaterial({color: 0xff6b3d})
+    );
+    mesh.position.copy(latLonTo3D(m.lat, m.lon, R * 1.03));
+    mesh.userData = m;
+    globeGroup.add(mesh);
+    markers3D.push(mesh);
+  });
+
+  // Initial overlay
+  updateGlobeFromOverlays();
+
+  // Controls
+  const el = renderer.domElement;
+  el.addEventListener('pointerdown', e => {
+    dragging = true; autoRot = false;
+    lastX = e.clientX; lastY = e.clientY;
+    targetRotX = targetRotY = null;
+  });
+  window.addEventListener('pointerup', () => dragging = false);
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    rotY += (e.clientX - lastX) * 0.005;
+    rotX += (e.clientY - lastY) * 0.005;
+    rotX = Math.max(-1.4, Math.min(1.4, rotX));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    camZ = Math.max(15, Math.min(60, camZ + e.deltaY * 0.02));
+  }, {passive: false});
+
+  const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+  el.addEventListener('click', e => {
+    const rect = el.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    ray.setFromCamera(mouse, camera);
+
+    const hitMarkers = ray.intersectObjects(markers3D);
+    if (hitMarkers.length) {
+      selectSite(hitMarkers[0].object.userData);
+      focusOn(hitMarkers[0].object.userData.lat, hitMarkers[0].object.userData.lon);
+      return;
+    }
+
+    if (routeMode && globeSphereMesh) {
+      const hitGlobe = ray.intersectObject(globeSphereMesh);
+      if (hitGlobe.length) {
+        const worldPoint = hitGlobe[0].point.clone();
+        const localPoint = globeGroup.worldToLocal(worldPoint);
+        const ll = point3DToLatLon(localPoint);
+        handleRoutePoint(ll.lat, ll.lon);
+      }
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    const w = cont.clientWidth, h = cont.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  });
+
+  animate3D();
+}
+
+function updateGlobeTexture(mode) {
+  if (!globeTexCtx || !globeTex) return;
+  const ctx = globeTexCtx;
+  const w = 2048, h = 1024;
+  ctx.clearRect(0, 0, w, h);
+
+  let fn = mode === 'geology' ? geologyColor :
+           mode === 'radiation' ? radiationColor :
+           mode === 'dust' ? dustColor : null;
+
+  if (!fn) {
+    overlayMesh.material.opacity = 0;
+    globeTex.needsUpdate = true;
+    return;
+  }
+
+  overlayMesh.material.opacity = 0.75;
+  const step = 4;
+  for (let y = 0; y < h; y += step) {
+    const lat = 90 - (y / h) * 180;
+    for (let x = 0; x < w; x += step) {
+      const lon = (x / w) * 360 - 180;
+      ctx.fillStyle = fn(lat, lon);
+      ctx.fillRect(x, y, step, step);
+    }
+  }
+  globeTex.needsUpdate = true;
+}
+
+function focusOn(lat, lon) {
+  const p = latLonTo3D(lat, lon, 1);
+  targetRotX = Math.asin(p.y);
+  targetRotY = Math.atan2(-p.x, -p.z);
+}
+
+function draw3DRoute(path) {
+  if (routeLine3D) {
+    globeGroup.remove(routeLine3D);
+    routeLine3D.geometry.dispose();
+    routeLine3D = null;
+  }
+  if (!path || path.length < 2) return;
+  const pts = path.map(p => latLonTo3D(p.lat, p.lon, R * 1.04));
+  routeLine3D = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color: 0x06b6d4, linewidth: 3})
+  );
+  globeGroup.add(routeLine3D);
+}
+
+function animate3D() {
+  requestAnimationFrame(animate3D);
+  if (currentView !== '3d' || !renderer) return;
+  if (targetRotX != null) {
+    rotX += (targetRotX - rotX) * 0.08;
+    rotY += (targetRotY - rotY) * 0.08;
+    if (Math.abs(targetRotX - rotX) < 0.01 && Math.abs(targetRotY - rotY) < 0.01) {
+      targetRotX = targetRotY = null;
+    }
+  } else if (autoRot && !dragging) {
+    rotY += 0.001;
+  }
+  globeGroup.rotation.x = rotX;
+  globeGroup.rotation.y = rotY;
+  camera.position.z += (camZ - camera.position.z) * 0.1;
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   7. VIEW SWITCH + UI
+   ============================================================ */
+function setView(mode) {
+  currentView = mode;
+  document.getElementById('btn-2d').classList.toggle('active', mode === '2d');
+  document.getElementById('btn-3d').classList.toggle('active', mode === '3d');
+  document.getElementById('map').style.display = mode === '2d' ? 'block' : 'none';
+  document.getElementById('globe-container').style.display = mode === '3d' ? 'block' : 'none';
+  document.getElementById('globe-hint').classList.toggle('show', mode === '3d');
+
+  if (mode === '3d') {
+    if (!scene) init3D();
+    else {
+      const c = document.getElementById('globe-container');
+      if (c.clientWidth) {
+        camera.aspect = c.clientWidth / c.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(c.clientWidth, c.clientHeight);
+      }
+      updateGlobeFromOverlays();
+      if (lastPath) draw3DRoute(lastPath);
+      if (startPoint && startMarker3D) globeGroup.add(startMarker3D);
+      if (endPoint && endMarker3D) globeGroup.add(endMarker3D);
+    }
+    setTimeout(() => map.invalidateSize(), 0);
+  } else {
+    setTimeout(() => map.invalidateSize(), 0);
+  }
+}
+
+/* ============================================================
+   PHOTOS + LEARN MORE (added)
+   - Photos come live from the NASA Image Library (images-api.nasa.gov).
+     If that fails, one Wikipedia photo is used. Nothing to host yourself.
+   - To improve a site, add its id here. Sites not listed use their name.
+   ============================================================ */
+const MORE_INFO = {
+  viking1:      {q: "Viking 1 lander Mars",        wiki: "Viking_1"},
+  viking2:      {q: "Viking 2 lander Mars",        wiki: "Viking_2"},
+  pathfinder:   {q: "Mars Pathfinder Sojourner",   wiki: "Mars_Pathfinder"},
+  spirit:       {q: "Spirit rover Mars Gusev",     wiki: "Spirit_(rover)"},
+  opportunity:  {q: "Opportunity rover Mars",      wiki: "Opportunity_(rover)"},
+  phoenix:      {q: "Phoenix Mars lander",         wiki: "Phoenix_(spacecraft)"},
+  curiosity:    {q: "Curiosity rover Mars Gale",   wiki: "Curiosity_(rover)"},
+  insight:      {q: "InSight Mars lander",         wiki: "InSight"},
+  perseverance: {q: "Perseverance rover Jezero",   wiki: "Perseverance_(rover)"},
+  ingenuity:    {q: "Ingenuity Mars helicopter",   wiki: "Ingenuity_(helicopter)"}
+};
+let photoToken = 0;   // lets us ignore old results if the user clicks another site quickly
+
+function photoEsc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function moreLinksHtml(m) {
+  const info = MORE_INFO[m.id] || {};
+  const q = encodeURIComponent(info.q || (m.name + " Mars"));
+  const wiki = info.wiki
+    ? "https://en.wikipedia.org/wiki/" + info.wiki
+    : "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(m.name + " Mars");
+  const links = [
+    ["📖 Wikipedia article", wiki],
+    ["🖼️ More photos – NASA Image Library", "https://images.nasa.gov/search?q=" + q],
+    ["🛰️ NASA Mars Exploration", "https://science.nasa.gov/mars/"],
+    ["🌍 See this place on Google Mars", `https://www.google.com/maps/space/mars/@${m.lat},${m.lon},8z`],
+    ["🗺️ NASA Mars Trek (map tool)", "https://trek.nasa.gov/mars/"]
+  ];
+  return links.map(l => `<a href="${l[1]}" target="_blank" rel="noopener noreferrer">${l[0]}</a>`).join("");
+}
+
+async function loadPhotos(m) {
+  const token = ++photoToken;
+  const grid = document.getElementById("photo-grid");
+  const credit = document.getElementById("photo-credit");
+  if (!grid) return;
+  const info = MORE_INFO[m.id] || {};
+  let photos = [];
+
+  try {                                   // 1) NASA Image Library
+    const url = "https://images-api.nasa.gov/search?media_type=image&q=" + encodeURIComponent(info.q || (m.name + " Mars"));
+    const data = await (await fetch(url)).json();
+    photos = data.collection.items
+      .filter(i => i.links && i.links[0] && i.data && i.data[0])
+      .slice(0, 6)
+      .map(i => ({src: i.links[0].href, title: i.data[0].title, link: "https://images.nasa.gov/details/" + encodeURIComponent(i.data[0].nasa_id)}));
+  } catch (e) {}
+
+  if (!photos.length && info.wiki) {      // 2) Wikipedia fallback (1 photo)
+    try {
+      const d = await (await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + info.wiki)).json();
+      if (d.thumbnail) photos = [{src: d.thumbnail.source, title: d.title, link: "https://en.wikipedia.org/wiki/" + info.wiki}];
+    } catch (e) {}
+  }
+
+  if (token !== photoToken) return;       // user already clicked something else
+  if (!photos.length) {
+    grid.innerHTML = '<p class="hint" style="grid-column:1/-1">No photos available right now. Use the links below.</p>';
+    return;
+  }
+  grid.innerHTML = photos.map(p =>
+    `<a href="${photoEsc(p.link)}" target="_blank" rel="noopener noreferrer" title="${photoEsc(p.title)}">` +
+    `<img loading="lazy" src="${photoEsc(p.src)}" alt="${photoEsc(p.title)}" onerror="this.parentNode.style.display='none'"></a>`).join("");
+  credit.textContent = "Photos: NASA Image Library / Wikipedia. Click a photo to open it.";
+}
+
+function selectSite(m) {
+  document.getElementById("default-info").style.display = "none";
+  const s = document.getElementById("site-info");
+  s.style.display = "flex";
+  s.innerHTML = `
+    <div class="panel"><h3>📍 ${m.name}</h3>
+      <span class="tag">${m.type} · ${m.year}</span>
+      <p style="color:var(--text);font-weight:500;margin-bottom:6px">${m.loc}</p>
+      <dl>
+        <dt>Goal</dt><dd>${m.goal}</dd>
+        <dt>Route</dt><dd>${m.route}</dd>
+        <dt>Distance</dt><dd>${m.dist}</dd>
+        ${m.targets ? `<dt>Targets</dt><dd>${m.targets}</dd>` : ""}
+      </dl>
+    </div>
+    <div class="panel"><h3>📸 Photos</h3>
+      <div id="photo-grid" class="photo-grid"><p class="hint" style="grid-column:1/-1">Loading photos…</p></div>
+      <p class="photo-credit" id="photo-credit"></p>
+    </div>
+    <div class="panel"><h3>🔗 Learn More</h3>
+      <div class="more-links">${moreLinksHtml(m)}</div>
+    </div>
+    <div class="panel"><h3>🪨 Geology</h3>
+      <span class="tag safe">${m.era}</span>
+      <p>${m.unit}</p>
+    </div>
+    ${m.eva ? `<div class="panel"><h3>👨‍🚀 EVA Plan</h3>
+      <span class="tag warn">Surface Ops</span>
+      <p>${m.eva}</p>
+    </div>` : ""}
+    <div class="panel"><h3>⚠️ Hazards</h3>
+      <span class="tag danger">Critical</span>
+      <p><b>Radiation:</b> 625–1,700+ mSv. Secondary neutrons scatter from regolith.</p>
+      <p style="margin-top:6px"><b>Atmosphere:</b> 6–10 mbar. No magnetosphere. Unhindered UV.</p>
+    </div>
+  `;
+  loadPhotos(m);
+}
+
+/* ============================================================
+   8. ROUTE PLANNER
+   ============================================================ */
+const routeLayer2D = L.layerGroup().addTo(map);
+
+function setRouteMode(m) {
+  routeMode = m;
+  document.querySelectorAll('.route-btns .btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(m === 'start' ? 'btn-start' : 'btn-end').classList.add('active');
+  const status = document.getElementById('route-status');
+  status.textContent = m === 'start' ? '🟢 Click map/globe to set START' : '🔴 Click map/globe to set END';
+  status.classList.add('show');
+}
+
+function hideRouteStatus() {
+  document.getElementById('route-status').classList.remove('show');
+}
+
+function handleRoutePoint(lat, lon) {
+  if (routeMode === 'start') {
+    startPoint = {lat, lon};
+    if (startM2D) map.removeLayer(startM2D);
+    startM2D = L.marker([lat, lon], {
+      icon: L.divIcon({className: '', html: '<div class="route-point-start" style="width:14px;height:14px"></div>', iconSize: [14,14], iconAnchor: [7,7]})
+    }).addTo(routeLayer2D);
+    if (startMarker3D) globeGroup.remove(startMarker3D);
+    startMarker3D = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 16, 16),
+      new THREE.MeshBasicMaterial({color: 0x4ade80})
+    );
+    startMarker3D.position.copy(latLonTo3D(lat, lon, R * 1.05));
+    if (currentView === '3d') globeGroup.add(startMarker3D);
+  } else if (routeMode === 'end') {
+    endPoint = {lat, lon};
+    if (endM2D) map.removeLayer(endM2D);
+    endM2D = L.marker([lat, lon], {
+      icon: L.divIcon({className: '', html: '<div class="route-point-end" style="width:14px;height:14px"></div>', iconSize: [14,14], iconAnchor: [7,7]})
+    }).addTo(routeLayer2D);
+    if (endMarker3D) globeGroup.remove(endMarker3D);
+    endMarker3D = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 16, 16),
+      new THREE.MeshBasicMaterial({color: 0xf87171})
+    );
+    endMarker3D.position.copy(latLonTo3D(lat, lon, R * 1.05));
+    if (currentView === '3d') globeGroup.add(endMarker3D);
+  }
+  routeMode = null;
+  document.querySelectorAll('.route-btns .btn').forEach(b => b.classList.remove('active'));
+  hideRouteStatus();
+}
+
+map.on('click', e => {
+  if (!routeMode) return;
+  handleRoutePoint(e.latlng.lat, e.latlng.lng);
+});
+
+function calculateRoute() {
+  if (!startPoint || !endPoint) { alert("Set Start and End points first."); return; }
+  const mode = document.getElementById('route-mode').value;
+  const path = astar(
+    latLonToGrid(startPoint.lat, startPoint.lon),
+    latLonToGrid(endPoint.lat, endPoint.lon),
+    mode
+  );
+  if (!path) { alert("No path found."); return; }
+  lastPath = path;
+
+  routeLayer2D.clearLayers();
+  if (startM2D) startM2D.addTo(routeLayer2D);
+  if (endM2D) endM2D.addTo(routeLayer2D);
+  const pl = L.polyline(path.map(p => [p.lat, p.lon]), {className: 'route-line'}).addTo(routeLayer2D);
+  map.fitBounds(pl.getBounds(), {padding: [50, 50]});
+
+  if (currentView === '3d') draw3DRoute(path);
+
+  let d = 0, h = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    d += Math.hypot(path[i].lat - path[i+1].lat, path[i].lon - path[i+1].lon) * 111;
+    h += getCost(path[i].lat, path[i].lon, mode);
+  }
+  document.getElementById('route-stats').style.display = 'block';
+  document.getElementById('stat-dist').textContent = `${d.toFixed(0)} km`;
+  document.getElementById('stat-hazard').textContent = `${(h / path.length).toFixed(1)} / 10`;
+  document.getElementById('stat-time').textContent = `~${(d / 4).toFixed(0)} hours`;
+}
+
+function clearRoute() {
+  routeLayer2D.clearLayers();
+  if (routeLine3D) { globeGroup.remove(routeLine3D); routeLine3D = null; }
+  if (startMarker3D) { globeGroup.remove(startMarker3D); startMarker3D = null; }
+  if (endMarker3D) { globeGroup.remove(endMarker3D); endMarker3D = null; }
+  startPoint = endPoint = startM2D = endM2D = lastPath = null;
+  document.getElementById('route-stats').style.display = 'none';
+  hideRouteStatus();
+}
+
+/* ============================================================
+   9. SEARCH + INIT
+   ============================================================ */
+document.getElementById("search").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase(), ul = document.getElementById("results");
+  ul.innerHTML = "";
+  if (q.length < 2) return;
+  MISSIONS.filter(m => (m.name + m.loc).toLowerCase().includes(q)).forEach(m => {
+    const li = document.createElement("li");
+    li.textContent = `${m.name} (${m.loc})`;
+    li.onclick = () => {
+      if (currentView === '3d') focusOn(m.lat, m.lon);
+      else map.flyTo([m.lat, m.lon], 5);
+      selectSite(m);
+      ul.innerHTML = "";
+      document.getElementById("search").value = "";
+    };
+    ul.appendChild(li);
+  });
+});
+
+geoLayer.addTo(map);
+syncCheckboxes();
+updateLegendFromState();
+</script>
+</body>
+</html>
