@@ -248,6 +248,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 let currentView = '2d';
 let activeOverlay = null;
 let scene, camera, renderer, globeGroup, overlayMesh, globeTex, globeTexCtx;
+let baseMat3D = null, imageryTex3D = null, elevTex3D = null, currentBase = 'imagery';   // 3D base-layer switching
 let markers3D = [], routeLine3D = null, globeSphereMesh = null;
 let pulses3D = [];
 let dragging = false, lastX = 0, lastY = 0, rotX = 0.3, rotY = 0;
@@ -497,6 +498,7 @@ function setBaseLayer(type) {
     map.removeLayer(viking);
     mola.addTo(map);
   }
+  setGlobeBase(type);          // keep the 3D globe in sync with the chosen base layer
 }
 
 function toggleOverlay(name, enabled) {
@@ -708,6 +710,44 @@ function loadRealMars(canvas, done) {
   loadImg('assets/mars.jpg', img => { ctx.drawImage(img, 0, 0, W, H); done(); }, fromTiles);
 }
 
+// Switch the globe's surface between Imagery (Viking) and Elevation (MOLA).
+// The MOLA colour-shaded tiles are loaded once (same NASA source as the 2D map) and cached.
+function setGlobeBase(type) {
+  currentBase = type;
+  if (!baseMat3D) return;                                 // globe not created yet: init3D applies it
+  if (type === 'imagery') {
+    baseMat3D.map = imageryTex3D;
+    baseMat3D.needsUpdate = true;
+    return;
+  }
+  if (!elevTex3D) {
+    const cols = 8, rows = 4, canvas = document.createElement('canvas');
+    canvas.width = cols * 256; canvas.height = rows * 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    elevTex3D = new THREE.CanvasTexture(canvas);
+    if (THREE.sRGBEncoding) elevTex3D.encoding = THREE.sRGBEncoding;
+    elevTex3D.minFilter = THREE.LinearMipmapLinearFilter;
+    elevTex3D.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    let finished = 0, loaded = 0;
+    for (let x = 0; x < cols; x++) for (let y = 0; y < rows; y++) {
+      loadImg(trek + 'Mars_MGS_MOLA_ClrShade_merge_global_463m' + tail.replace('{z}', 2).replace('{y}', y).replace('{x}', x),
+        img => { ctx.drawImage(img, x * 256, y * 256, 257, 257); loaded++; elevTex3D.needsUpdate = true; done(); },
+        done);
+    }
+    function done() {
+      if (++finished < cols * rows) return;
+      if (!loaded && currentBase === 'elevation') {       // tiles unavailable: go back to imagery
+        console.warn('Elevation tiles unavailable');
+        elevTex3D = null;
+        baseMat3D.map = imageryTex3D; baseMat3D.needsUpdate = true;
+      }
+    }
+  }
+  baseMat3D.map = elevTex3D;
+  baseMat3D.needsUpdate = true;
+}
+
 function init3D() {
   const cont = document.getElementById('globe-container');
   if (typeof THREE === 'undefined') {
@@ -767,6 +807,8 @@ function init3D() {
     baseMaterial
   );
   globeGroup.add(baseSphereMesh);
+  baseMat3D = baseMaterial; imageryTex3D = marsTexture;
+  if (currentBase === 'elevation') setGlobeBase('elevation');   // user chose elevation before opening the globe
 
   // Replace the fake texture with real Mars imagery as soon as it loads
   loadRealMars(marsCanvas, () => {
