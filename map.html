@@ -246,7 +246,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
    1. STATE
    ============================================================ */
 let currentView = '2d';
-let activeOverlay = 'geology';
+let activeOverlay = null;
 let scene, camera, renderer, globeGroup, overlayMesh, globeTex, globeTexCtx;
 let markers3D = [], routeLine3D = null, globeSphereMesh = null;
 let pulses3D = [];
@@ -518,6 +518,8 @@ function toggleOverlay(name, enabled) {
 }
 
 function updateLegendFromState() {
+  document.getElementById('legend').style.display =
+    (map.hasLayer(geoLayer) || map.hasLayer(radLayer) || map.hasLayer(dustLayer)) ? '' : 'none';
   if (map.hasLayer(geoLayer)) { setLegend("Geologic Structure"); return; }
   if (map.hasLayer(radLayer)) { setLegend("Radiation Zones"); return; }
   if (map.hasLayer(dustLayer)) { setLegend("Dust Hazards"); return; }
@@ -1247,7 +1249,7 @@ document.getElementById("search").addEventListener("input", e => {
   });
 });
 
-geoLayer.addTo(map);
+// Default state: 2D map + Imagery (Viking) only. Analysis layers are off until the user turns them on.
 syncCheckboxes();
 updateLegendFromState();
 </script>
