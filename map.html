@@ -891,8 +891,7 @@ function init3D() {
 
     const hitMarkers = ray.intersectObjects(markers3D);
     if (hitMarkers.length) {
-      selectSite(hitMarkers[0].object.userData);
-      focusOn(hitMarkers[0].object.userData.lat, hitMarkers[0].object.userData.lon);
+      selectSite(hitMarkers[0].object.userData);   // selectSite now also zooms in (see zoomToSite)
       return;
     }
 
@@ -950,7 +949,24 @@ function updateGlobeTexture(mode) {
 function focusOn(lat, lon) {
   const p = latLonTo3D(lat, lon, 1);
   targetRotX = Math.asin(p.y);
-  targetRotY = Math.atan2(-p.x, -p.z);
+  // rotate around Y so the point ends up facing the camera (+Z); take the shortest way round
+  const t = Math.atan2(-p.x, p.z);
+  let d = t - rotY;
+  d = ((d + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  targetRotY = rotY + d;
+}
+
+/* ============================================================
+   NEW: DRAMATIC ZOOM-IN when a site is chosen (2D and 3D)
+   ============================================================ */
+function zoomToSite(m) {
+  if (currentView === '3d') {
+    autoRot = false;                 // stop the idle spin
+    focusOn(m.lat, m.lon);           // swing the globe so the site faces you
+    camZ = 17;                       // push the camera in close (min allowed is 15)
+  } else {
+    map.flyTo([m.lat, m.lon], 7, {duration: 2.4, easeLinearity: 0.2});   // swooping fly-in to max zoom
+  }
 }
 
 function draw3DRoute(path) {
@@ -1100,6 +1116,7 @@ async function loadPhotos(m) {
 }
 
 function selectSite(m) {
+  zoomToSite(m);   // NEW: dramatic zoom-in (2D fly-in or 3D swing + camera push)
   document.getElementById("default-info").style.display = "none";
   const s = document.getElementById("site-info");
   s.style.display = "flex";
@@ -1281,9 +1298,7 @@ document.getElementById("search").addEventListener("input", e => {
     const li = document.createElement("li");
     li.textContent = `${m.name} (${m.loc})`;
     li.onclick = () => {
-      if (currentView === '3d') focusOn(m.lat, m.lon);
-      else map.flyTo([m.lat, m.lon], 5);
-      selectSite(m);
+      selectSite(m);   // selectSite now handles the zoom for both 2D and 3D
       ul.innerHTML = "";
       document.getElementById("search").value = "";
     };
