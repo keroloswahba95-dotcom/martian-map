@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ares HUD | Mars Surface Explorer</title>
+<title>Martian-Nexus | Mars Surface Explorer</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -167,7 +167,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;
 <body>
 <div class="app">
 <aside class="sidebar">
-  <a href="#" class="logo"><span class="logo-dot"></span>ARES <strong>INTERFACE</strong></a>
+  <a href="#" class="logo"><span class="logo-dot"></span>MARTIAN<strong>-NEXUS</strong></a>
   <div><input type="text" id="search" placeholder="Search sites..." autocomplete="off"><ul class="results" id="results"></ul></div>
   <div class="panel">
     <h3>🧭 Smart Route Planner</h3>
@@ -953,20 +953,20 @@ function setView(mode) {
 /* ============================================================
    PHOTOS + LEARN MORE (added)
    - Photos come live from the NASA Image Library (images-api.nasa.gov).
-     If that fails, one Wikipedia photo is used. Nothing to host yourself.
-   - To improve a site, add its id here. Sites not listed use their name.
+     Nothing to host yourself.
+   - To improve a site's photo search, add its id here. Sites not listed use their name.
    ============================================================ */
 const MORE_INFO = {
-  viking1:      {q: "Viking 1 lander Mars",        wiki: "Viking_1"},
-  viking2:      {q: "Viking 2 lander Mars",        wiki: "Viking_2"},
-  pathfinder:   {q: "Mars Pathfinder Sojourner",   wiki: "Mars_Pathfinder"},
-  spirit:       {q: "Spirit rover Mars Gusev",     wiki: "Spirit_(rover)"},
-  opportunity:  {q: "Opportunity rover Mars",      wiki: "Opportunity_(rover)"},
-  phoenix:      {q: "Phoenix Mars lander",         wiki: "Phoenix_(spacecraft)"},
-  curiosity:    {q: "Curiosity rover Mars Gale",   wiki: "Curiosity_(rover)"},
-  insight:      {q: "InSight Mars lander",         wiki: "InSight"},
-  perseverance: {q: "Perseverance rover Jezero",   wiki: "Perseverance_(rover)"},
-  ingenuity:    {q: "Ingenuity Mars helicopter",   wiki: "Ingenuity_(helicopter)"}
+  viking1:      {q: "Viking 1 lander Mars"},
+  viking2:      {q: "Viking 2 lander Mars"},
+  pathfinder:   {q: "Mars Pathfinder Sojourner"},
+  spirit:       {q: "Spirit rover Mars Gusev"},
+  opportunity:  {q: "Opportunity rover Mars"},
+  phoenix:      {q: "Phoenix Mars lander"},
+  curiosity:    {q: "Curiosity rover Mars Gale"},
+  insight:      {q: "InSight Mars lander"},
+  perseverance: {q: "Perseverance rover Jezero"},
+  ingenuity:    {q: "Ingenuity Mars helicopter"}
 };
 let photoToken = 0;   // lets us ignore old results if the user clicks another site quickly
 
@@ -977,11 +977,7 @@ function photoEsc(s) {
 function moreLinksHtml(m) {
   const info = MORE_INFO[m.id] || {};
   const q = encodeURIComponent(info.q || (m.name + " Mars"));
-  const wiki = info.wiki
-    ? "https://en.wikipedia.org/wiki/" + info.wiki
-    : "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(m.name + " Mars");
   const links = [
-    ["📖 Wikipedia article", wiki],
     ["🖼️ More photos – NASA Image Library", "https://images.nasa.gov/search?q=" + q],
     ["🛰️ NASA Mars Exploration", "https://science.nasa.gov/mars/"],
     ["🌍 See this place on Google Mars", `https://www.google.com/maps/space/mars/@${m.lat},${m.lon},8z`],
@@ -1007,13 +1003,6 @@ async function loadPhotos(m) {
       .map(i => ({src: i.links[0].href, title: i.data[0].title, link: "https://images.nasa.gov/details/" + encodeURIComponent(i.data[0].nasa_id)}));
   } catch (e) {}
 
-  if (!photos.length && info.wiki) {      // 2) Wikipedia fallback (1 photo)
-    try {
-      const d = await (await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + info.wiki)).json();
-      if (d.thumbnail) photos = [{src: d.thumbnail.source, title: d.title, link: "https://en.wikipedia.org/wiki/" + info.wiki}];
-    } catch (e) {}
-  }
-
   if (token !== photoToken) return;       // user already clicked something else
   if (!photos.length) {
     grid.innerHTML = '<p class="hint" style="grid-column:1/-1">No photos available right now. Use the links below.</p>';
@@ -1022,7 +1011,7 @@ async function loadPhotos(m) {
   grid.innerHTML = photos.map(p =>
     `<a href="${photoEsc(p.link)}" target="_blank" rel="noopener noreferrer" title="${photoEsc(p.title)}">` +
     `<img loading="lazy" src="${photoEsc(p.src)}" alt="${photoEsc(p.title)}" onerror="this.parentNode.style.display='none'"></a>`).join("");
-  credit.textContent = "Photos: NASA Image Library / Wikipedia. Click a photo to open it.";
+  credit.textContent = "Photos: NASA Image Library. Click a photo to open it.";
 }
 
 function selectSite(m) {
