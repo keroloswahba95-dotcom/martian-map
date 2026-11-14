@@ -1,13 +1,14 @@
 :root {
   --bg: #0b0610;
   --bg-2: #160a14;
-  --rust: #d9531e;
-  --orange: #ff8a3d;
-  --sand: #f2c9a0;
+  --rust: #9E482F;
+  --orange: #E8753B;
+  --terracotta: #F09A62;
+  --sand: #FFB36B;
   --text: #f4e9e1;
   --muted: #b9a49a;
   --card: rgba(255, 255, 255, 0.05);
-  --border: rgba(255, 138, 61, 0.25);
+  --border: rgba(232, 117, 59, 0.28);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,7 +16,7 @@ html { scroll-behavior: smooth; }
 
 body {
   font-family: "Inter", system-ui, sans-serif;
-  background: radial-gradient(ellipse at 70% 10%, #3a1410 0%, var(--bg-2) 40%, var(--bg) 100%);
+  background: radial-gradient(ellipse at 70% 10%, #2f160f 0%, var(--bg-2) 40%, var(--bg) 100%);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
@@ -64,7 +65,7 @@ nav a {
 }
 nav a:hover { color: var(--orange); }
 .nav-btn {
-  color: #fff; padding: 8px 18px; border-radius: 999px;
+  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); padding: 8px 18px; border-radius: 999px;
   background: linear-gradient(135deg, var(--rust), var(--orange));
 }
 .nav-btn:hover { color: #fff; filter: brightness(1.1); }
@@ -95,11 +96,11 @@ h1 span {
 }
 .btn:hover { transform: translateY(-3px); }
 .btn-primary {
-  color: #fff; background: linear-gradient(135deg, var(--rust), var(--orange));
-  box-shadow: 0 8px 28px rgba(217, 83, 30, 0.45);
+  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); background: linear-gradient(135deg, var(--rust), var(--orange));
+  box-shadow: 0 8px 28px rgba(232, 117, 59, 0.45);
 }
 .btn-ghost { color: var(--sand); border: 1px solid var(--border); }
-.btn-ghost:hover { background: var(--card); }
+.btn-ghost:hover { background: var(--card); border-color: var(--terracotta); }
 
 .stats { list-style: none; display: flex; gap: 34px; flex-wrap: wrap; }
 .stats strong {
@@ -113,8 +114,8 @@ h1 span {
 .planet {
   position: relative; width: min(380px, 75vw); aspect-ratio: 1; border-radius: 50%;
   background:
-    radial-gradient(circle at 30% 30%, #ffb27a 0%, #d9531e 40%, #7a2412 75%, #3b0f0a 100%);
-  box-shadow: 0 0 80px rgba(217, 83, 30, 0.55), inset -40px -30px 80px rgba(0, 0, 0, 0.6);
+    radial-gradient(circle at 30% 30%, #FFB36B 0%, #E8753B 40%, #9E482F 75%, #4A2014 100%);
+  box-shadow: 0 0 80px rgba(232, 117, 59, 0.55), inset -40px -30px 80px rgba(0, 0, 0, 0.6);
   animation: float 7s ease-in-out infinite;
   overflow: hidden;
 }
@@ -128,7 +129,7 @@ h1 span {
 .c3 { width: 20%; height: 20%; top: 66%; left: 60%; }
 .canyon {
   position: absolute; top: 48%; left: 8%; width: 70%; height: 5%;
-  background: linear-gradient(90deg, transparent, rgba(60, 15, 8, 0.7), transparent);
+  background: linear-gradient(90deg, transparent, rgba(74, 32, 20, 0.7), transparent);
   border-radius: 50%; transform: rotate(-8deg);
 }
 .orbit {
@@ -164,7 +165,7 @@ h1 span {
 }
 .card:hover {
   transform: translateY(-8px); border-color: var(--orange);
-  box-shadow: 0 14px 34px rgba(217, 83, 30, 0.25);
+  box-shadow: 0 14px 34px rgba(232, 117, 59, 0.25);
 }
 .icon { font-size: 2rem; margin-bottom: 14px; }
 .card h3 { margin-bottom: 8px; color: var(--sand); }
@@ -183,13 +184,13 @@ h1 span {
 .era small { display: block; color: var(--muted); margin-bottom: 12px; }
 .era p { color: var(--muted); font-size: 0.95rem; }
 .noachian { border-color: #8a4b7a; }
-.hesperian { border-color: #d9531e; }
+.hesperian { border-color: #E8753B; }
 .amazonian { border-color: #f2c14e; }
 
 /* CTA */
 .cta {
   margin: 20px 6% 60px; border-radius: 28px;
-  background: linear-gradient(135deg, rgba(217, 83, 30, 0.35), rgba(138, 75, 122, 0.25));
+  background: linear-gradient(135deg, rgba(232, 117, 59, 0.35), rgba(138, 75, 122, 0.25));
   border: 1px solid var(--border);
 }
 .cta p { color: var(--muted); margin-bottom: 26px; }
